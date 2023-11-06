@@ -1,0 +1,4 @@
+grpcio==1.56.0
+protobuf
+dapr==1.10.0
+cloudevents
