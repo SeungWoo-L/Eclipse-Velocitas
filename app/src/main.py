@@ -13,11 +13,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """A sample skeleton vehicle app."""
-
 import asyncio
 import json
 import logging
+import os
 import signal
+from logging.handlers import TimedRotatingFileHandler
 
 from vehicle import Vehicle, vehicle  # type: ignore
 from velocitas_sdk.util.log import (  # type: ignore
@@ -27,96 +28,192 @@ from velocitas_sdk.util.log import (  # type: ignore
 from velocitas_sdk.vdb.reply import DataPointReply
 from velocitas_sdk.vehicle_app import VehicleApp, subscribe_topic
 
-# Configure the VehicleApp logger with the necessary log config and level.
-logging.setLogRecordFactory(get_opentelemetry_log_factory())
-logging.basicConfig(format=get_opentelemetry_log_format())
-logging.getLogger().setLevel("DEBUG")
-logger = logging.getLogger(__name__)
+# Logger setup
+LOG_PATH = "logs/vehicle/app.log"
 
+# Ensure the log directory exists
+os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
+
+# Logger names
+SPEED_LOGGER_NAME = "vehicle/speed"
+LONGI_ACCEL_LOGGER_NAME = "vehicle/acceleration_longitudinal"
+LAT_ACCEL_LOGGER_NAME = "vehicle/acceleration_lateral"
+VER_ACCEL_LOGGER_NAME = "vehicle/acceleration_vertical"
+
+# Log format
+LOG_FORMAT = "%(asctime)s [%(name)s]- %(message)s"
+
+# MQTT topics
 GET_SPEED_REQUEST_TOPIC = "sampleapp/getSpeed"
 GET_SPEED_RESPONSE_TOPIC = "sampleapp/getSpeed/response"
-DATABROKER_SUBSCRIPTION_TOPIC = "sampleapp/currentSpeed"
+DATABROKER_SPEED_SUBSCRIPTION_TOPIC = "sampleapp/currentSpeed"
+
+GET_LONGI_ACCEL_REQUEST_TOPIC = "sampleapp/getLongitudinalAccel"
+GET_LONGI_ACCEL_RESPONSE_TOPIC = "sampleapp/getLongitudinalAccel/response"
+DATABROKER_LONGI_ACCEL_SUBSCRIPTION_TOPIC = "sampleapp/currentLongitudinalAccel"
+
+GET_LAT_ACCEL_REQUEST_TOPIC = "sampleapp/getLateralAccel"
+GET_LAT_ACCEL_RESPONSE_TOPIC = "sampleapp/getLateralAccel/response"
+DATABROKER_LAT_ACCEL_SUBSCRIPTION_TOPIC = "sampleapp/currentLateralAccel"
+
+GET_VER_ACCEL_REQUEST_TOPIC = "sampleapp/getVerticalAccel"
+GET_VER_ACCEL_RESPONSE_TOPIC = "sampleapp/getVerticalAccel/response"
+DATABROKER_VER_ACCEL_SUBSCRIPTION_TOPIC = "sampleapp/currentVerticalAccel"
+
+# Configure the VehicleApp logger with the necessary log config and level
+logging.setLogRecordFactory(get_opentelemetry_log_factory())
+logging.basicConfig(format=get_opentelemetry_log_format())
+logging.getLogger().setLevel(logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+
+# Helper function to set up loggers
+def setup_accel_logger(logger_name):
+    log_handler = TimedRotatingFileHandler(
+        filename=LOG_PATH, when="s", interval=60, backupCount=5, encoding="utf-8"
+    )
+    log_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    logger = logging.getLogger(logger_name)
+    logger.addHandler(log_handler)
+    logger.setLevel(logging.INFO)
+    return logger
+
+
+# Create loggers for each type of acceleration
+SpeedLogger = setup_accel_logger(SPEED_LOGGER_NAME)
+LongiAccelLogger = setup_accel_logger(LONGI_ACCEL_LOGGER_NAME)
+LatAccelLogger = setup_accel_logger(LAT_ACCEL_LOGGER_NAME)
+VerAccelLogger = setup_accel_logger(VER_ACCEL_LOGGER_NAME)
 
 
 class SampleApp(VehicleApp):
-    """
-    Sample skeleton vehicle app.
-
-    The skeleton subscribes to a getSpeed MQTT topic
-    to listen for incoming requests to get
-    the current vehicle speed and publishes it to
-    a response topic.
-
-    It also subcribes to the VehicleDataBroker
-    directly for updates of the
-    Vehicle.Speed signal and publishes this
-    information via another specific MQTT topic
-    """
-
     def __init__(self, vehicle_client: Vehicle):
-        # SampleApp inherits from VehicleApp.
         super().__init__()
-        self.Vehicle = vehicle_client
+        self.vehicle = vehicle_client
 
     async def on_start(self):
-        """Run when the vehicle app starts"""
-        # This method will be called by the SDK when the connection to the
-        # Vehicle DataBroker is ready.
-        # Here you can subscribe for the Vehicle Signals update (e.g. Vehicle Speed).
-        await self.Vehicle.Speed.subscribe(self.on_speed_change)
+        await self.vehicle.Speed.subscribe(self.on_speed_change)
+        await self.vehicle.Acceleration.Longitudinal.subscribe(self.on_accel_change)
+        await self.vehicle.Acceleration.Lateral.subscribe(self.on_accel_change)
+        await self.vehicle.Acceleration.Vertical.subscribe(self.on_accel_change)
 
     async def on_speed_change(self, data: DataPointReply):
-        """The on_speed_change callback, this will be executed when receiving a new
-        vehicle signal updates."""
-        # Get the current vehicle speed value from the received DatapointReply.
-        # The DatapointReply containes the values of all subscribed DataPoints of
-        # the same callback.
-        vehicle_speed = data.get(self.Vehicle.Speed).value
-
-        # Do anything with the received value.
-        # Example:
-        # - Publishes current speed to MQTT Topic (i.e. DATABROKER_SUBSCRIPTION_TOPIC).
+        vehicle_speed = data.get(self.vehicle.Speed).value
+        SpeedLogger.info("Vehicle speed: %s", vehicle_speed)
         await self.publish_event(
-            DATABROKER_SUBSCRIPTION_TOPIC,
-            json.dumps({"speed": vehicle_speed}),
+            DATABROKER_SPEED_SUBSCRIPTION_TOPIC, json.dumps({"speed": vehicle_speed})
+        )
+
+    async def on_accel_change(self, data: DataPointReply):
+        vehicle_longi_accel = data.get(self.vehicle.Acceleration.Longitudinal).value
+        vehicle_lat_acceleration = data.get(self.vehicle.Acceleration.Lateral).value
+        vehicle_ver_acceleration = data.get(self.vehicle.Acceleration.Vertical).value
+
+        LongiAccelLogger.info(
+            "Vehicle longitudinal acceleration: %s", vehicle_longi_accel
+        )
+        LatAccelLogger.info(
+            "Vehicle lateral acceleration: %s", vehicle_lat_acceleration
+        )
+        VerAccelLogger.info(
+            "Vehicle vertical acceleration: %s", vehicle_ver_acceleration
+        )
+
+        # Publish each acceleration value to its respective topic
+        await self.publish_event(
+            DATABROKER_LONGI_ACCEL_SUBSCRIPTION_TOPIC,
+            json.dumps({"longitudinal_acceleration": vehicle_longi_accel}),
+        )
+        await self.publish_event(
+            DATABROKER_LAT_ACCEL_SUBSCRIPTION_TOPIC,
+            json.dumps({"lateral_acceleration": vehicle_lat_acceleration}),
+        )
+        await self.publish_event(
+            DATABROKER_VER_ACCEL_SUBSCRIPTION_TOPIC,
+            json.dumps({"vertical_acceleration": vehicle_ver_acceleration}),
         )
 
     @subscribe_topic(GET_SPEED_REQUEST_TOPIC)
-    async def on_get_speed_request_received(self, data: str) -> None:
-        """The subscribe_topic annotation is used to subscribe for incoming
-        PubSub events, e.g. MQTT event for GET_SPEED_REQUEST_TOPIC.
-        """
-
-        # Use the logger with the preferred log level (e.g. debug, info, error, etc)
+    async def on_get_speed_request_received(self, data: str):
         logger.debug(
-            "PubSub event for the Topic: %s -> is received with the data: %s",
+            "Received speed request on topic %s with data: %s",
             GET_SPEED_REQUEST_TOPIC,
             data,
         )
-
-        # Getting current speed from VehicleDataBroker using the DataPoint getter.
-        vehicle_speed = (await self.Vehicle.Speed.get()).value
-
-        # Do anything with the speed value.
-        # Example:
-        # - Publishes the vehicle speed to MQTT topic (i.e. GET_SPEED_RESPONSE_TOPIC).
+        vehicle_speed = (await self.vehicle.Speed.get()).value
         await self.publish_event(
             GET_SPEED_RESPONSE_TOPIC,
+            json.dumps(
+                {"result": {"status": 0, "message": f"Speed = {vehicle_speed}"}}
+            ),
+        )
+
+    @subscribe_topic(GET_LONGI_ACCEL_REQUEST_TOPIC)
+    async def on_get_longi_accel_request_received(self, data: str):
+        logger.debug(
+            "Received longitudinal acceleration request on topic %s with data: %s",
+            GET_LONGI_ACCEL_REQUEST_TOPIC,
+            data,
+        )
+        vehicle_longi_accel = (await self.vehicle.Acceleration.Longitudinal.get()).value
+        await self.publish_event(
+            GET_LONGI_ACCEL_RESPONSE_TOPIC,
             json.dumps(
                 {
                     "result": {
                         "status": 0,
-                        "message": f"""Current Speed = {vehicle_speed}""",
-                    },
+                        "message": f"Longi Acceleration = {vehicle_longi_accel}",
+                    }
                 }
             ),
         )
 
+    @subscribe_topic(GET_LAT_ACCEL_REQUEST_TOPIC)
+    async def on_get_lat_accel_request_received(self, data: str):
+        logger.debug(
+            "Received lateral acceleration request on topic %s with data: %s",
+            GET_LAT_ACCEL_REQUEST_TOPIC,
+            data,
+        )
+        vehicle_lat_accel = (await self.vehicle.Acceleration.Lateral.get()).value
+        await self.publish_event(
+            GET_LAT_ACCEL_RESPONSE_TOPIC,
+            json.dumps(
+                {
+                    "result": {
+                        "status": 0,
+                        "message": f"LAT Acceleration = {vehicle_lat_accel}",
+                    }
+                }
+            ),
+        )
 
+    @subscribe_topic(GET_VER_ACCEL_REQUEST_TOPIC)
+    async def on_get_ver_accel_request_received(self, data: str):
+        logger.debug(
+            "Received vertical acceleration request on topic %s with data: %s",
+            GET_VER_ACCEL_REQUEST_TOPIC,
+            data,
+        )
+        vehicle_ver_accel = (await self.vehicle.Acceleration.Vertical.get()).value
+        await self.publish_event(
+            GET_VER_ACCEL_RESPONSE_TOPIC,
+            json.dumps(
+                {
+                    "result": {
+                        "status": 0,
+                        "message": f"Vertical Acceleration = {vehicle_ver_accel}",
+                    }
+                }
+            ),
+        )
+
+    # Add similar methods for lateral and vertical acceleration requests
+
+
+# Remaining async main and loop setup
 async def main():
-    """Main function"""
     logger.info("Starting SampleApp...")
-    # Constructing SampleApp and running it.
     vehicle_app = SampleApp(vehicle)
     await vehicle_app.run()
 

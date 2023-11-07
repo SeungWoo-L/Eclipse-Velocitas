@@ -23,6 +23,9 @@ from velocitas_sdk.vdb.types import TypedDataPointResult
 from velocitas_sdk.vehicle_app import VehicleApp
 
 MOCKED_SPEED = 0.0
+MOCKED_LONGI_ACCEL = 0.0
+MOCKED_LAT_ACCEL = 0.0
+MOCKED_VER_ACCEL = 0.0
 
 
 @pytest.mark.asyncio
@@ -43,6 +46,66 @@ async def test_for_get_speed():
 
 
 @pytest.mark.asyncio
+async def test_for_get_longi_acceleration():
+    result = TypedDataPointResult(
+        "foo", MOCKED_LONGI_ACCEL, Timestamp(seconds=10, nanos=0)
+    )
+
+    with mock.patch.object(
+        vehicle.Acceleration.Longitudinal,
+        "get",
+        new_callable=mock.AsyncMock,
+        return_value=result,
+    ):
+        current_longi_acceleration = (
+            await vehicle.Acceleration.Longitudinal.get()
+        ).value
+        print(f"Received Longitudinal acceleration: {current_longi_acceleration}")
+        # Uncomment to test the behaviour of the SampleApp as provided by
+        #     the template repository:
+        # assert current_longi_acceleration == MOCKED_ACCELERATION
+
+
+async def test_for_get_lateral_acceleration():
+    result = TypedDataPointResult(
+        "foo", MOCKED_LAT_ACCEL, Timestamp(seconds=10, nanos=0)
+    )
+
+    with mock.patch.object(
+        vehicle.Acceleration.Lateral,
+        "get",
+        new_callable=mock.AsyncMock,
+        return_value=result,
+    ):
+        current_lateral_acceleration = (await vehicle.Acceleration.Lateral.get()).value
+        print(f"Received Lateral acceleration: {current_lateral_acceleration}")
+        # Uncomment to test the behaviour of the SampleApp as provided by
+        #     the template repository:
+        # assert current_lateral_acceleration == MOCKED_LAT_ACCEL
+
+
+@pytest.mark.asyncio
+async def test_for_get_vertical_acceleration():
+    result = TypedDataPointResult(
+        "foo", MOCKED_VER_ACCEL, Timestamp(seconds=10, nanos=0)
+    )
+
+    with mock.patch.object(
+        vehicle.Acceleration.Vertical,
+        "get",
+        new_callable=mock.AsyncMock,
+        return_value=result,
+    ):
+        current_vertical_acceleration = (
+            await vehicle.Acceleration.Vertical.get()
+        ).value
+        print(f"Received Vertical acceleration: {current_vertical_acceleration}")
+        # Uncomment to test the behaviour of the SampleApp as provided by
+        #     the template repository:
+        # assert current_vertical_acceleration == MOCKED_VER_ACCEL
+
+
+@pytest.mark.asyncio
 async def test_for_publish_to_topic():
     with mock.patch.object(
         VehicleApp, "publish_mqtt_event", new_callable=mock.AsyncMock, return_value=-1
@@ -60,6 +123,9 @@ async def test_for_publish_to_topic():
 def get_sample_response_data():
     return {
         "result": {
-            "message": f"""Current Speed = {MOCKED_SPEED}""",
+            "Speed_message": f"""Speed = {MOCKED_SPEED}""",
+            "Longi_Accel_message": f"""Longitudinal Accel= {MOCKED_LONGI_ACCEL}""",
+            "Lat_Accel_message": f"""Lateral Accel= {MOCKED_LAT_ACCEL}""",
+            "Ver_Accel_message": f"""Vertical Accel= {MOCKED_VER_ACCEL}""",
         },
     }

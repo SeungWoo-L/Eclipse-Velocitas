@@ -11,6 +11,18 @@
                         {
                             "path": "Vehicle.Speed",
                             "access": "read"
+                        },
+                        {
+                            "path": "Vehicle.Acceleration.Longitudinal",
+                            "access": "read"
+                        },
+                        {
+                            "path": "Vehicle.Acceleration.Lateral",
+                            "access": "read"
+                        },
+                        {
+                            "path": "Vehicle.Acceleration.Vertical",
+                            "access": "read"
                         }
                     ]
                 }
@@ -20,11 +32,20 @@
             "type": "pubsub",
             "config": {
                 "reads": [
-                    "sampleapp/getSpeed"
+                    "sampleapp/getSpeed",
+                    "sampleapp/getAcceleration",
+                    "sampleapp/getLateralAccel",
+                    "sampleapp/getVerticalAccel"
                 ],
                 "writes": [
                     "sampleapp/getSpeed/response",
-                    "sampleapp/currentSpeed"
+                    "sampleapp/currentSpeed",
+                    "sampleapp/getLongitudinalAccel/response",
+                    "sampleapp/currentLongitudinalAccel",
+                    "sampleapp/getLateralAccel/response",
+                    "sampleapp/currentLateralAccel",
+                    "sampleapp/getVerticalAccel/response",
+                    "sampleapp/currentVerticalAccel"
                 ]
             }
         }
