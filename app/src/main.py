@@ -96,6 +96,7 @@ class SampleApp(VehicleApp):
         await self.vehicle.Acceleration.Longitudinal.subscribe(self.on_accel_change)
         await self.vehicle.Acceleration.Lateral.subscribe(self.on_accel_change)
         await self.vehicle.Acceleration.Vertical.subscribe(self.on_accel_change)
+        
 
     async def on_speed_change(self, data: DataPointReply):
         vehicle_speed = data.get(self.vehicle.Speed).value
